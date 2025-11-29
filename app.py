@@ -56,7 +56,7 @@ Document:
 """
 
     response = client.models.generate_content(
-        model="gemini-1.5-flash",
+        model="gemini-2.5-flash",
         contents=prompt,
     )
 
@@ -64,10 +64,10 @@ Document:
 
 # ------------- Streamlit UI ------------- #
 
-st.set_page_config(page_title="AI Document Summarizer", page_icon="🧠", layout="wide")
+st.set_page_config(page_title="Gemini Document Summarizer", page_icon="📄", layout="wide")
 
-st.title("🧠 AI Document Summarizer")
-st.caption("Powered by Google Gemini & Streamlit – paste text or upload a document to get a clean summary.")
+st.title("📄 Gemini Document Summarizer")
+st.caption("Summarize Documents using Google Gemini & Streamlit – paste text or upload a document to get a clean summary.")
 
 # Sidebar options
 st.sidebar.header("⚙️ Settings")
