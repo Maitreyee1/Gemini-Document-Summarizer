@@ -9,7 +9,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Get API key
-GEMINI_API_KEY = os.getenv("gemapikey")
+#GEMINI_API_KEY = os.getenv("gemapikey")
+GEMINI_API_KEY = st.secrets["gemapikey"]
 
 if not GEMINI_API_KEY:
     st.error("GEMINI_API_KEY not found. Please set it as an environment variable or Streamlit secret.")
