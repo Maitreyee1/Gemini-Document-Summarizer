@@ -5,22 +5,27 @@ from google import genai
 from PyPDF2 import PdfReader
 from dotenv import load_dotenv
 
-# Load environment variables (for local dev)
+# -------------------------------------------------------
+# Load environment variables (for local development)
+# Streamlit Cloud will inject secrets automatically.
+# -------------------------------------------------------
 load_dotenv()
 
-# Get API key
-#GEMINI_API_KEY = os.getenv("gemapikey")
+
+# Retrieve Gemini API key from Streamlit Secrets. 
 GEMINI_API_KEY = st.secrets["gemapikey"]
 
+# Prevent app from running without an API key
 if not GEMINI_API_KEY:
     st.error("GEMINI_API_KEY not found. Please set it as an environment variable or Streamlit secret.")
     st.stop()
 
-# Initialize Gemini client
+# Initialize Gemini client with the API key
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# ------------- Helper functions ------------- #
-
+# -------------------------------------------------------
+# Helper Function: Extract text from a PDF file
+# -------------------------------------------------------
 def extract_text_from_pdf(file_bytes: bytes) -> str:
     reader = PdfReader(io.BytesIO(file_bytes))
     text = ""
@@ -28,18 +33,23 @@ def extract_text_from_pdf(file_bytes: bytes) -> str:
         text += page.extract_text() or ""
     return text.strip()
 
+# -------------------------------------------------------
+# Helper Function: Summarize text using Gemini API
+# -------------------------------------------------------
+
 def summarize_text(text: str, style: str, length: str) -> str:
     system_prompt = (
-        "You are a helpful assistant that summarizes documents for end-users.\n"
+        "You are a helpful assistant that summarizes documents for users.\n"
         "Return a clear, structured summary.\n"
     )
-
+    # Summary style mapping
     style_instruction = {
         "Bullet points": "Use bullet points with short, clear sentences.",
         "Paragraph": "Use 2–4 concise paragraphs.",
         "Executive brief": "Write an executive-style brief suitable for managers.",
     }.get(style, "Use bullet points with short, clear sentences.")
 
+    # Summary length mapping
     length_instruction = {
         "Very short": "Keep it under 5 bullet points or 100 words.",
         "Short": "About 150–250 words.",
@@ -47,6 +57,7 @@ def summarize_text(text: str, style: str, length: str) -> str:
         "Detailed": "Up to ~600 words, but stay concise.",
     }.get(length, "About 150–250 words.")
 
+    # System + user prompt combined
     prompt = f"""{system_prompt}
 Summarization style: {style_instruction}
 Length: {length_instruction}
@@ -54,7 +65,7 @@ Length: {length_instruction}
 Document:
 {text}
 """
-
+    # Call Gemini model to generate summary
     response = client.models.generate_content(
         model="gemini-2.5-flash",
         contents=prompt,
@@ -71,11 +82,14 @@ st.caption("Summarize Documents using Google Gemini & Streamlit – paste text o
 
 # Sidebar options
 st.sidebar.header("⚙️ Settings")
+
+# Select summary style
 style = st.sidebar.selectbox(
     "Summary style",
     ["Bullet points", "Paragraph", "Executive brief"],
     index=0,
 )
+# Select summary length
 length = st.sidebar.selectbox(
     "Summary length",
     ["Very short", "Short", "Medium", "Detailed"],
@@ -89,14 +103,14 @@ st.sidebar.markdown("**Model:** gemini-2.5-flash")
 tab1, tab2 = st.tabs(["✏️ Paste text", "📄 Upload file"])
 
 input_text = ""
-
+# -- Option 1: User pastes text manually --
 with tab1:
     input_text = st.text_area(
         "Paste your document text here:",
         height=250,
         placeholder="Paste an article, research paper text, or any document content...",
     )
-
+# -- Option 2:User uploads a PDF or TXT file --
 with tab2:
     uploaded_file = st.file_uploader("Upload a file (PDF or TXT)", type=["pdf", "txt"])
     if uploaded_file is not None:
