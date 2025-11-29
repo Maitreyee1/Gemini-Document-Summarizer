@@ -83,7 +83,7 @@ length = st.sidebar.selectbox(
 )
 
 st.sidebar.markdown("---")
-st.sidebar.markdown("**Model:** gemini-1.5-flash")
+st.sidebar.markdown("**Model:** gemini-2.5-flash")
 
 # Input area
 tab1, tab2 = st.tabs(["✏️ Paste text", "📄 Upload file"])
