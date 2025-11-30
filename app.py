@@ -1,53 +1,96 @@
+import os
+import io
 import streamlit as st
+from google import genai
+from PyPDF2 import PdfReader
+from dotenv import load_dotenv
 
-from services.document_loader import extract_text_from_pdf, chunk_text
-from services.summarizer import summarize_text, extract_key_points_and_actions
-
-# =====================================================
-# STREAMLIT APP: PAGE CONFIG
-# =====================================================
-
-st.set_page_config(
-    page_title="AI Document Assistant",
-    page_icon="📚",
-    layout="wide",
-)
-
-st.title("📚 AI Document Assistant")
-st.caption("Upload a document, then summarize it, extract key points, or chat with it.")
+# -------------------------------------------------------
+# Load environment variables (for local development)
+# Streamlit Cloud will inject secrets automatically.
+# -------------------------------------------------------
+load_dotenv()
 
 
-# =====================================================
-# SESSION STATE INITIALIZATION
-# =====================================================
+# Retrieve Gemini API key from Streamlit Secrets. 
+GEMINI_API_KEY = st.secrets["gemapikey"]
 
-if "doc_text" not in st.session_state:
-    st.session_state.doc_text = ""
-if "chunks" not in st.session_state:
-    st.session_state.chunks = []
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []  # list of (role, content)
+# Prevent app from running without an API key
+if not GEMINI_API_KEY:
+    st.error("GEMINI_API_KEY not found. Please set it as an environment variable or Streamlit secret.")
+    st.stop()
 
+# Initialize Gemini client with the API key
+client = genai.Client(api_key=GEMINI_API_KEY)
 
-# =====================================================
-# SIDEBAR: MODES & SETTINGS
-# =====================================================
+# -------------------------------------------------------
+# Helper Function: Extract text from a PDF file
+# -------------------------------------------------------
+def extract_text_from_pdf(file_bytes: bytes) -> str:
+    reader = PdfReader(io.BytesIO(file_bytes))
+    text = ""
+    for page in reader.pages:
+        text += page.extract_text() or ""
+    return text.strip()
 
-st.sidebar.header("⚙️ Assistant Settings")
+# -------------------------------------------------------
+# Helper Function: Summarize text using Gemini API
+# -------------------------------------------------------
 
-mode = st.sidebar.radio(
-    "Assistant mode",
-    ["Summarize document", "Key points & action items", "Chat with document"],
-    index=0,
-)
+def summarize_text(text: str, style: str, length: str) -> str:
+    system_prompt = (
+        "You are a helpful assistant that summarizes documents for users.\n"
+        "Return a clear, structured summary.\n"
+    )
+    # Summary style mapping
+    style_instruction = {
+        "Bullet points": "Use bullet points with short, clear sentences.",
+        "Paragraph": "Use 2–4 concise paragraphs.",
+        "Executive brief": "Write an executive-style brief suitable for managers.",
+    }.get(style, "Use bullet points with short, clear sentences.")
 
-summary_style = st.sidebar.selectbox(
+    # Summary length mapping
+    length_instruction = {
+        "Very short": "Keep it under 5 bullet points or 100 words.",
+        "Short": "About 150–250 words.",
+        "Medium": "About 250–400 words.",
+        "Detailed": "Up to ~600 words, but stay concise.",
+    }.get(length, "About 150–250 words.")
+
+    # System + user prompt combined
+    prompt = f"""{system_prompt}
+Summarization style: {style_instruction}
+Length: {length_instruction}
+
+Document:
+{text}
+"""
+    # Call Gemini model to generate summary
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt,
+    )
+
+    return response.text
+
+# ------------- Streamlit UI ------------- #
+
+st.set_page_config(page_title="Gemini Document Summarizer", page_icon="📄", layout="wide")
+
+st.title("📄 Gemini Document Summarizer")
+st.caption("Summarize Documents using Google Gemini & Streamlit – paste text or upload a document to get a clean summary.")
+
+# Sidebar options
+st.sidebar.header("⚙️ Settings")
+
+# Select summary style
+style = st.sidebar.selectbox(
     "Summary style",
     ["Bullet points", "Paragraph", "Executive brief"],
     index=0,
 )
-
-summary_length = st.sidebar.selectbox(
+# Select summary length
+length = st.sidebar.selectbox(
     "Summary length",
     ["Very short", "Short", "Medium", "Detailed"],
     index=1,
@@ -56,131 +99,57 @@ summary_length = st.sidebar.selectbox(
 st.sidebar.markdown("---")
 st.sidebar.markdown("**Model:** gemini-2.5-flash")
 
-
-# =====================================================
-# DOCUMENT INPUT: PASTE OR UPLOAD
-# =====================================================
-
-st.subheader("1️⃣ Upload or paste your document")
-
+# Input area
 tab1, tab2 = st.tabs(["✏️ Paste text", "📄 Upload file"])
 
-# ----- Paste text tab -----
+input_text = ""
+# -- Option 1: User pastes text manually --
 with tab1:
-    pasted_text = st.text_area(
+    input_text = st.text_area(
         "Paste your document text here:",
-        height=220,
-        placeholder="Paste article, research paper, meeting notes, etc.",
-        value=st.session_state.doc_text,
+        height=250,
+        placeholder="Paste an article, research paper text, or any document content...",
     )
-
-    if st.button("Use pasted text"):
-        st.session_state.doc_text = pasted_text
-        st.session_state.chunks = chunk_text(st.session_state.doc_text)
-        st.session_state.chat_history = []
-        st.success("Document updated from pasted text.")
-
-
-# ----- Upload file tab -----
+# -- Option 2:User uploads a PDF or TXT file --
 with tab2:
-    uploaded_file = st.file_uploader(
-        "Upload a PDF or TXT file",
-        type=["pdf", "txt"],
-    )
-
+    uploaded_file = st.file_uploader("Upload a file (PDF or TXT)", type=["pdf", "txt"])
     if uploaded_file is not None:
         if uploaded_file.type == "application/pdf":
             file_bytes = uploaded_file.read()
-            doc_text = extract_text_from_pdf(file_bytes)
-        else:  # text/plain
-            doc_text = uploaded_file.read().decode("utf-8", errors="ignore")
+            input_text = extract_text_from_pdf(file_bytes)
+        elif uploaded_file.type in ["text/plain"]:
+            input_text = uploaded_file.read().decode("utf-8", errors="ignore")
 
-        st.text_area(
-            "Extracted text (you can edit below before applying):",
-            value=doc_text,
-            height=220,
-            key="uploaded_text_area",
-        )
+        if input_text:
+            st.success(f"Loaded content from: {uploaded_file.name[:60]}")
+            st.text_area("Extracted text (you can edit this before summarizing):",
+                         value=input_text,
+                         height=250,
+                         key="file_text_area")
 
-        if st.button("Use uploaded text"):
-            st.session_state.doc_text = st.session_state.uploaded_text_area
-            st.session_state.chunks = chunk_text(st.session_state.doc_text)
-            st.session_state.chat_history = []
-            st.success(f"Document loaded from: {uploaded_file.name}")
+# Show basic stats
+if input_text:
+    num_chars = len(input_text)
+    num_words = len(input_text.split())
+    st.markdown(f"**Document length:** {num_words} words ({num_chars} characters)")
 
-
-# =====================================================
-# DOCUMENT STATS
-# =====================================================
-
-if st.session_state.doc_text:
-    num_words = len(st.session_state.doc_text.split())
-    num_chars = len(st.session_state.doc_text)
-    st.markdown(
-        f"📊 **Current document length:** {num_words} words "
-        f"({num_chars} characters), {len(st.session_state.chunks)} chunks."
-    )
-else:
-    st.info("No document loaded yet. Paste text or upload a file to get started.")
-
-
-# =====================================================
-# MODE A: SUMMARIZE DOCUMENT
-# =====================================================
-
-if mode == "Summarize document":
-    st.subheader("2️⃣ Summarize your document")
-
-    if not st.session_state.doc_text:
-        st.warning("Please load a document first.")
+# Summarize button
+if st.button("Summarize 🚀"):
+    if not input_text or input_text.strip() == "":
+        st.warning("Please paste some text or upload a file first.")
     else:
-        if st.button("Generate summary 🚀"):
-            with st.spinner("Summarizing with Gemini..."):
-                try:
-                    summary = summarize_text(
-                        st.session_state.doc_text,
-                        style=summary_style,
-                        length=summary_length,
-                    )
-                    st.subheader("📌 Summary")
-                    st.write(summary)
+        with st.spinner("Generating summary with Gemini..."):
+            try:
+                summary = summarize_text(input_text, style=style, length=length)
+                st.subheader("📌 Summary")
+                st.write(summary)
 
-                    st.download_button(
-                        label="📥 Download summary as TXT",
-                        data=summary,
-                        file_name="summary.txt",
-                        mime="text/plain",
-                    )
-                except Exception as e:
-                    st.error(f"Error while summarizing: {e}")
-
-
-# =====================================================
-# MODE B: KEY POINTS & ACTION ITEMS
-# =====================================================
-
-elif mode == "Key points & action items":
-    st.subheader("2️⃣ Extract key points & action items")
-
-    if not st.session_state.doc_text:
-        st.warning("Please load a document first.")
-    else:
-        if st.button("Extract key points ✅"):
-            with st.spinner("Extracting key points and action items..."):
-                try:
-                    result = extract_key_points_and_actions(
-                        st.session_state.doc_text
-                    )
-                    st.subheader("📌 Key Points & Action Items")
-                    st.write(result)
-
-                    st.download_button(
-                        label="📥 Download as TXT",
-                        data=result,
-                        file_name="key_points_and_actions.txt",
-                        mime="text/plain",
-                    )
-                except Exception as e:
-                    st.error(f"Error while extracting: {e}")
-
-
+                # Option to download summary
+                st.download_button(
+                    label="Download summary as TXT",
+                    data=summary,
+                    file_name="summary.txt",
+                    mime="text/plain",
+                )
+            except Exception as e:
+                st.error(f"Error while summarizing: {e}")
