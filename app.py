@@ -344,8 +344,7 @@ summary_length = st.sidebar.selectbox(
 )
 
 st.sidebar.markdown("---")
-st.sidebar.markdown("**Model:** gemini-2.5-flash  
-**Embeddings:** text-embedding-004")
+st.sidebar.markdown("**Model:** gemini-2.5-flash, **Embeddings:** text-embedding-004")
 
 
 # =====================================================
