@@ -13,7 +13,7 @@ so this file focuses only on user interface & app flow.
 import streamlit as st
 
 from services.document_loader import extract_text_from_pdf
-from services.summarizer import summarize_text, extract_key_points_and_actions
+from services.patent_summarizer import summarize_text, extract_key_points_and_actions
 
 
 # =====================================================
@@ -170,7 +170,7 @@ if mode == "Patent summary":
                 try:
                     # NOTE:
                     # `summary_style` is now patent-specific (see options above).
-                    # You can adjust the prompt logic inside services/summarizer.py
+                    # You can adjust the prompt logic inside services/patent_summarizer.py
                     # to interpret these styles and build a patent-aware prompt.
                     summary = summarize_text(
                         st.session_state.doc_text,
