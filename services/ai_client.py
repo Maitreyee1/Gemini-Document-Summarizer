@@ -8,7 +8,6 @@ from dotenv import load_dotenv
 # but load_dotenv() won't hurt.
 load_dotenv()
 
-
 def _create_client() -> genai.Client:
     """
     Creates and returns a configured Gemini client.
@@ -19,19 +18,17 @@ def _create_client() -> genai.Client:
     Returns:
         genai.Client instance.
     """
-  load_dotenv()
-
 
 # Retrieve Gemini API key from Streamlit Secrets. 
-  GEMINI_API_KEY = st.secrets["gemapikey"]
+    GEMINI_API_KEY = st.secrets["gemapikey"]
 
 # Prevent app from running without an API key
-  if not GEMINI_API_KEY:
-      st.error("GEMINI_API_KEY not found. Please set it as an environment variable or Streamlit secret.")
-      st.stop()
+    if not GEMINI_API_KEY:
+        st.error("GEMINI_API_KEY not found. Please set it as an environment variable or Streamlit secret.")
+        st.stop()
 
 # Initialize Gemini client with the API key
-  client = genai.Client(api_key=GEMINI_API_KEY)
+    return genai.Client(api_key=GEMINI_API_KEY)
 
 
 # Global shared Gemini client for the whole app.
