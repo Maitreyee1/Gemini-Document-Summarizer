@@ -1,9 +1,11 @@
 import os
 import io
+import numpy as np
 import streamlit as st
 from google import genai
 from PyPDF2 import PdfReader
 from dotenv import load_dotenv
+
 
 # -------------------------------------------------------
 # Load environment variables (for local development)
